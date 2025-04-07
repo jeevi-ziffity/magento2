@@ -17,9 +17,9 @@ jobs:
       - name: Install Dependencies
         run: composer install --no-progress --prefer-dist --no-suggest
 
-      - name: Clone Wiki Repo
+      - name: Clone Wiki Repo (Authenticated)
         run: |
-          git clone https://github.com/jeevi-ziffity/magento2.wiki.git wiki
+          git clone https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.wiki.git wiki
 
       - name: Run PHPUnit and Save Coverage Report to Wiki
         run: |
@@ -45,4 +45,4 @@ jobs:
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git add .
           git commit -m "Add code coverage report – $(date)"
-          git push origin main || git push origin master
+          git push origin master
