@@ -1,0 +1,21 @@
+name: CI
+
+on: [push]
+
+jobs:
+    phpunit:
+        runs-on: ubuntu-latest
+
+        steps:
+        - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4
+        - uses: shivammathur/setup-php@9e72090525849c5e82e596468b86eb55e9cc5401 # v2
+          with:
+            php-version: '8.2.0'
+            tools: composer:v2.2
+
+        - name: Install Dependencies
+          run: composer install --no-progress --prefer-dist --no-suggest
+
+        - name: Run Unit Tests
+          run: |
+            php vendor/bin/phpunit -c dev/tests/unit/phpunit.xml --testsuite Magento_GRA -v
