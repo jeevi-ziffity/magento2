@@ -19,7 +19,8 @@ jobs:
 
       - name: Clone Wiki Repo (Authenticated)
         run: |
-          git clone https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.wiki.git wiki
+          git clone https://x-access-token:${{ secrets.WIKI_PAT }}@github.com/${{ github.repository }}.wiki.git wiki
+
 
       - name: Run PHPUnit and Save Coverage Report to Wiki
         run: |
