@@ -17,6 +17,12 @@ jobs:
       - name: Install Dependencies
         run: composer install --no-progress --prefer-dist --no-suggest
 
+      - name: Debug WIKI_PAT Token
+        run: |
+          echo "Your WIKI_PAT Token starts with: ${WIKI_PAT:0:4}xxxx" # Mask everything but the first 4 characters
+        env:
+          WIKI_PAT: ${{ secrets.WIKI_PAT }}
+
       - name: Clone Wiki Repo (Authenticated)
         run: |
           git clone https://x-access-token:${{ secrets.WIKI_PAT }}@github.com/${{ github.repository }}.wiki.git wiki
