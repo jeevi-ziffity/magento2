@@ -17,20 +17,11 @@ jobs:
       - name: Install Dependencies
         run: composer install --no-progress --prefer-dist --no-suggest
 
-      - name: Verify Xdebug Installation
-        run: php -m | grep xdebug
-
       - name: Clone Wiki Repo (Authenticated)
         run: |
           git clone https://x-access-token:${{ secrets.WIKI_PAT }}@github.com/${{ github.repository }}.wiki.git wiki
           cd wiki
           git remote set-url origin https://x-access-token:${{ secrets.WIKI_PAT }}@github.com/${{ github.repository }}.wiki.git
-
-      - name: Debug Current Directory
-        run: |
-          echo "PWD: $(pwd)"
-          ls -la
-          ls -la app/code/
 
       - name: Run PHPUnit and Save Coverage Report to Wiki
         run: |
