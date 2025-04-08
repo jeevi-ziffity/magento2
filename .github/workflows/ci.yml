@@ -36,7 +36,7 @@ jobs:
             -c dev/tests/unit/phpunit.xml \
             --testsuite Magento_GRA \
             --coverage-filter=app/code/ \
-            --coverage-text >> $WIKI_PAGE
+            --coverage-text | tee -a $WIKI_PAGE
 
           echo "\`\`\`" >> $WIKI_PAGE
 
