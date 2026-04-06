@@ -40,4 +40,4 @@ jobs:
           reporter: github-pr-review
           fail_level: error
           stylelint_input: "**/*.less"
-          packages: "stylelint"
+          packages: "stylelint@17.4.0"
