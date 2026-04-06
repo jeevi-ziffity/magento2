@@ -1,0 +1,43 @@
+name: Linters
+
+on:
+  pull_request:
+    paths:
+      - "**.php"
+      - "**.phtml"
+      - "**.js"
+      - "**.css"
+      - "**.less"
+      - "**.xml"
+
+jobs:
+  linters:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v2
+        with:
+          fetch-depth: 0
+
+      - name: Lint Code Base
+        uses: github/super-linter@v4
+        env:
+          VALIDATE_ALL_CODEBASE: false
+          VALIDATE_PHP_BUILTIN: true
+          VALIDATE_JAVASCRIPT_ES: true
+          VALIDATE_XML: true
+          VALIDATE_CSS: true
+          DEFAULT_BRANCH: master
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          LINTER_RULES_PATH: /
+          JAVASCRIPT_ES_CONFIG_FILE: dev/config/eslint/.eslintrc
+          JAVASCRIPT_DEFAULT_STYLE: prettier
+
+      - name: Stylelint
+        uses: reviewdog/action-stylelint@v1
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          reporter: github-pr-review
+          fail_level: error
+          stylelint_input: "**/*.less"
+          packages: "stylelint"
