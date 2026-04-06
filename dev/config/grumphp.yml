@@ -1,0 +1,40 @@
+grumphp:
+    ascii:
+        failed: ./vendor/phpro/grumphp/resources/ascii/failed.txt
+        succeeded: ./vendor/phpro/grumphp/resources/ascii/succeeded.txt
+    process_timeout: 120
+    tasks:
+        git_commit_message:
+            allow_empty_message: false
+            enforce_capitalized_subject: true
+            enforce_no_subject_trailing_period: true
+            enforce_single_lined_subject: true
+            max_body_width: 72
+            max_subject_width: 100
+            matchers:
+                Must contain JIRA issue number: /(MAG-\d+:|ENGS-\d+:|^Merge)/
+            case_insensitive: true
+            multiline: true
+            additional_modifiers: ''
+        git_blacklist:
+            keywords:
+                - "die"
+                - "var_dump("
+                - "exit"
+                - "console.log("
+                - "ObjectManager::getInstance"
+            triggered_by: ['php', 'phtml', 'js']
+        phpversion:
+            project: '7.3'
+        phplint:
+            triggered_by: ['php', 'phtml']
+        xmllint: ~
+    testsuites:
+        git_pre_commit:
+            tasks: [git_commit_message, phpversion, phplint, xmllint]
+    environment:
+        variables:
+            GRUMPHP_COMPOSER_DIR: .
+            GRUMPHP_BIN_DIR: ./vendor/bin
+        paths:
+            - 'tools'
