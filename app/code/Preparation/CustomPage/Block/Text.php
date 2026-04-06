@@ -7,6 +7,7 @@ use Magento\Framework\View\Element\Template;
 
 class Text extends Template
 {
+    
     /**
      * @return string
      */
