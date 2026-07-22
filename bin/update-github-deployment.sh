@@ -1,64 +1,31 @@
 #!/bin/bash
 
-################################################################################
-# GitHub Deployment Status Update Script
-#
-# This script creates and updates GitHub deployment statuses via the GitHub API.
-# It's designed to be called from GoCD pipelines to track deployment progress.
-#
-# Usage:
-#   ./update-github-deployment.sh --state <state> [options]
-#
-# Required Arguments:
-#   --state <state>           Deployment state: pending, success, failure, error, inactive, in_progress, queued
-#
-# Optional Arguments:
-#   --environment <env>       Deployment environment (default: production)
-#   --description <desc>      Description of the deployment
-#   --deployment-id <id>      Existing deployment ID (for updates only)
-#   --github-token <token>    GitHub personal access token (or use GITHUB_TOKEN env var)
-#   --repo <owner/repo>       GitHub repository (or auto-detect from git)
-#   --ref <ref>               Git reference to deploy (default: current commit SHA)
-#
-# Environment Variables Used:
-#   GITHUB_TOKEN              GitHub personal access token (required if not passed via --github-token)
-#   GO_PIPELINE_NAME          GoCD pipeline name
-#   GO_STAGE_NAME             GoCD stage name
-#   GO_REVISION               Git commit SHA
-#   GO_PIPELINE_COUNTER       Pipeline run counter
-#   DEPLOYMENT_ID_FILE        Path to file storing deployment ID (default: /tmp/github_deployment_id.txt)
-#
-# Examples:
-#   # Create a new deployment with pending state
-#   ./update-github-deployment.sh --state pending --environment production
-#
-#   # Update existing deployment to success
-#   ./update-github-deployment.sh --state success --deployment-id 123456
-#
-#   # Update using stored deployment ID
-#   ./update-github-deployment.sh --state success
-################################################################################
-
 set -euo pipefail
 
 # Default values
 STATE=""
-ENVIRONMENT="production"
+ENVIRONMENT=""
 DESCRIPTION=""
 DEPLOYMENT_ID=""
 GITHUB_TOKEN="${GITHUB_TOKEN:-}"
 REPO=""
 REF=""
-DEPLOYMENT_ID_FILE="${DEPLOYMENT_ID_FILE:-/tmp/github_deployment_id.txt}"
+# Generate unique deployment ID file path based on GoCD variables
+# Falls back to simple path if GoCD variables not available
+if [[ -n "${GO_PIPELINE_NAME:-}" && -n "${GO_PIPELINE_COUNTER:-}" ]]; then
+    DEFAULT_DEPLOYMENT_FILE="/tmp/github_deployment_${GO_PIPELINE_NAME}_${GO_PIPELINE_COUNTER}.txt"
+else
+    DEFAULT_DEPLOYMENT_FILE="/tmp/github_deployment_id.txt"
+fi
+
+DEPLOYMENT_ID_FILE="${DEPLOYMENT_ID_FILE:-$DEFAULT_DEPLOYMENT_FILE}"
 
 # GitHub API settings
 GITHUB_API_URL="https://api.github.com"
 ACCEPT_HEADER="application/vnd.github+json"
-API_VERSION="2022-11-28"
+API_VERSION="2026-03-10"
 
-################################################################################
 # Helper Functions
-################################################################################
 
 log_info() {
     echo "[INFO] $*" >&2
@@ -74,13 +41,13 @@ log_error() {
 
 show_usage() {
     cat << EOF
-Usage: $0 --state <state> [options]
+Usage: $0 --state <state> --environment <env> [options]
 
 Required Arguments:
   --state <state>           Deployment state: pending, success, failure, error, inactive, in_progress, queued
+  --environment <env>       Deployment environment (e.g., live, uat, playground)
 
 Optional Arguments:
-  --environment <env>       Deployment environment (default: production)
   --description <desc>      Description of the deployment
   --deployment-id <id>      Existing deployment ID (for updates only)
   --github-token <token>    GitHub personal access token
@@ -90,17 +57,18 @@ Optional Arguments:
 
 Environment Variables:
   GITHUB_TOKEN              GitHub personal access token (required)
-  GO_PIPELINE_NAME          GoCD pipeline name
-  GO_STAGE_NAME             GoCD stage name
-  GO_REVISION               Git commit SHA
-  GO_PIPELINE_COUNTER       Pipeline run counter
-  DEPLOYMENT_ID_FILE        Path to deployment ID storage file
+  GO_REPOSITORY_NAME        GitHub repository (owner/repo format)
+  GO_PIPELINE_NAME          GoCD pipeline name (for unique file & description)
+  GO_STAGE_NAME             GoCD stage name (for description)
+  GO_REVISION               Git commit SHA (for deployment ref)
+  GO_PIPELINE_COUNTER       Pipeline run counter (for unique file & description)
+  DEPLOYMENT_ID_FILE        Custom path to deployment ID file
+                            (auto-generated if not set:
+                             /tmp/github_deployment_PIPELINE_COUNTER.txt)
 EOF
 }
 
-################################################################################
 # Parse Command Line Arguments
-################################################################################
 
 parse_arguments() {
     while [[ $# -gt 0 ]]; do
@@ -146,14 +114,20 @@ parse_arguments() {
     done
 }
 
-################################################################################
 # Validation Functions
-################################################################################
 
 validate_inputs() {
     # Check required state parameter
     if [[ -z "$STATE" ]]; then
         log_error "Missing required argument: --state"
+        show_usage
+        return 1
+    fi
+
+    # Check required environment parameter
+    if [[ -z "$ENVIRONMENT" ]]; then
+        log_error "Missing required argument: --environment"
+        log_error "You must specify the deployment environment (e.g., --environment live, --environment uat, --environment playground)"
         show_usage
         return 1
     fi
@@ -182,13 +156,18 @@ validate_inputs() {
     return 0
 }
 
-################################################################################
 # Auto-detect Repository Information
-################################################################################
 
 detect_repo() {
     if [[ -n "$REPO" ]]; then
         log_info "Using provided repository: $REPO"
+        return 0
+    fi
+
+    # Try GoCD environment variable first
+    if [[ -n "${GO_REPOSITORY_NAME:-}" ]]; then
+        REPO="$GO_REPOSITORY_NAME"
+        log_info "Using GO_REPOSITORY_NAME: $REPO"
         return 0
     fi
 
@@ -202,12 +181,12 @@ detect_repo() {
             # SSH: git@github.com:owner/repo.git
             # HTTPS: https://github.com/owner/repo.git
             REPO=$(echo "$remote_url" | sed -E 's/.*[:/]([^/]+\/[^/]+)\.git$/\1/' | sed 's/\.git$//')
-            log_info "Auto-detected repository: $REPO"
+            log_info "Auto-detected repository from git remote: $REPO"
             return 0
         fi
     fi
 
-    log_error "Could not detect repository. Please provide --repo owner/repo"
+    log_error "Could not detect repository. Please provide --repo owner/repo or set GO_REPOSITORY_NAME"
     return 1
 }
 
@@ -237,9 +216,7 @@ detect_ref() {
     return 1
 }
 
-################################################################################
 # Build Description from GoCD Variables
-################################################################################
 
 build_description() {
     if [[ -n "$DESCRIPTION" ]]; then
@@ -277,9 +254,7 @@ build_description() {
     echo "$desc"
 }
 
-################################################################################
 # Load Deployment ID from File
-################################################################################
 
 load_deployment_id() {
     if [[ -n "$DEPLOYMENT_ID" ]]; then
@@ -298,9 +273,7 @@ load_deployment_id() {
     return 0  # It's okay if no deployment ID exists (for creation)
 }
 
-################################################################################
 # Save Deployment ID to File
-################################################################################
 
 save_deployment_id() {
     local deployment_id="$1"
@@ -314,9 +287,7 @@ save_deployment_id() {
     return 0
 }
 
-################################################################################
 # Create GitHub Deployment
-################################################################################
 
 create_deployment() {
     log_info "Creating GitHub deployment for $REPO (ref: $REF, env: $ENVIRONMENT)"
@@ -357,7 +328,7 @@ EOF
 
     if [[ "$http_code" -ge 200 && "$http_code" -lt 300 ]]; then
         local new_deployment_id
-        new_deployment_id=$(echo "$body" | grep -o '"id":[0-9]*' | head -1 | cut -d':' -f2)
+        new_deployment_id=$(echo "$body" | grep -o '"id":[[:space:]]*[0-9]*' | head -1 | cut -d':' -f2 | tr -d '[:space:]')
 
         if [[ -z "$new_deployment_id" ]]; then
             log_error "Failed to extract deployment ID from response"
@@ -365,7 +336,7 @@ EOF
             return 1
         fi
 
-        log_info "✅ Created deployment successfully (ID: $new_deployment_id)"
+        log_info "Created deployment successfully (ID: $new_deployment_id)"
         save_deployment_id "$new_deployment_id"
         DEPLOYMENT_ID="$new_deployment_id"
 
@@ -379,9 +350,7 @@ EOF
     fi
 }
 
-################################################################################
 # Create/Update Deployment Status
-################################################################################
 
 create_deployment_status() {
     local status_state="$1"
@@ -427,7 +396,7 @@ EOF
     body=$(echo "$response" | sed '$d')
 
     if [[ "$http_code" -ge 200 && "$http_code" -lt 300 ]]; then
-        log_info "✅ Updated deployment status to '$status_state' successfully"
+        log_info "Updated deployment status to '$status_state' successfully"
         return 0
     else
         log_error "Failed to update deployment status (HTTP $http_code)"
@@ -436,13 +405,12 @@ EOF
     fi
 }
 
-################################################################################
 # Main Logic
-################################################################################
 
 main() {
     log_info "GitHub Deployment Status Update Script"
     log_info "========================================"
+    log_info "Using deployment ID file: $DEPLOYMENT_ID_FILE"
 
     # Parse arguments
     parse_arguments "$@"
@@ -492,9 +460,7 @@ main() {
     exit 0
 }
 
-################################################################################
 # Error Handling Wrapper
-################################################################################
 
 # Wrap main in error handler to ensure we always exit 0
 if ! main "$@"; then
